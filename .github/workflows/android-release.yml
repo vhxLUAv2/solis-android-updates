@@ -1,0 +1,69 @@
+name: Android Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, for example 0.1.1"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout private source
+        uses: actions/checkout@v4
+        with:
+          repository: vhxLUAv2/solis-android
+          token: ${{ secrets.SOLIS_RELEASE_UPDATES }}
+          path: source
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+
+      - name: Build APK
+        working-directory: source
+        run: gradle assembleDebug
+
+      - name: Prepare release files
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          mkdir -p release
+          cp source/app/build/outputs/apk/debug/app-debug.apk "release/Solis-Android-${VERSION}.apk"
+          sha256sum "release/Solis-Android-${VERSION}.apk" | awk '{print $1}' > release/sha256.txt
+
+      - name: Create latest.json
+        env:
+          VERSION: ${{ inputs.version }}
+          REPO: vhxLUAv2/solis-android-updates
+        run: |
+          SHA256=$(cat release/sha256.txt)
+          cat > release/latest.json <<EOF
+          {
+            "version": "${VERSION}",
+            "url": "https://github.com/${REPO}/releases/download/v${VERSION}/Solis-Android-${VERSION}.apk",
+            "sha256": "${SHA256}",
+            "mandatory": false
+          }
+          EOF
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          gh release create "v${VERSION}"             "release/Solis-Android-${VERSION}.apk"             "release/latest.json"             --repo vhxLUAv2/solis-android-updates             --title "Solis Android v${VERSION}"             --notes "Solis Android release v${VERSION}"
