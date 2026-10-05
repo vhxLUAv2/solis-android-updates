@@ -7,6 +7,10 @@ on:
         description: "Release version, for example 0.1.1"
         required: true
         type: string
+      version_code:
+        description: "Android versionCode, for example 2"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -34,16 +38,34 @@ jobs:
         with:
           gradle-version: "8.13"
 
-      - name: Build APK
+      - name: Decode release keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "ANDROID_KEYSTORE_BASE64 is not configured."
+            exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > source/solis-release.jks
+
+      - name: Build signed APK
         working-directory: source
-        run: gradle assembleDebug
+        env:
+          ANDROID_KEYSTORE_FILE: ${{ github.workspace }}/source/solis-release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          gradle assembleRelease \
+            -PsolisVersionName="${{ inputs.version }}" \
+            -PsolisVersionCode="${{ inputs.version_code }}"
 
       - name: Prepare release files
         env:
           VERSION: ${{ inputs.version }}
         run: |
           mkdir -p release
-          cp source/app/build/outputs/apk/debug/app-debug.apk "release/Solis-Android-${VERSION}.apk"
+          cp source/app/build/outputs/apk/release/app-release.apk "release/Solis-Android-${VERSION}.apk"
           sha256sum "release/Solis-Android-${VERSION}.apk" | awk '{print $1}' > release/sha256.txt
 
       - name: Create latest.json
@@ -66,4 +88,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
         run: |
-          gh release create "v${VERSION}"             "release/Solis-Android-${VERSION}.apk"             "release/latest.json"             --repo vhxLUAv2/solis-android-updates             --title "Solis Android v${VERSION}"             --notes "Solis Android release v${VERSION}"
+          gh release create "v${VERSION}" \
+            "release/Solis-Android-${VERSION}.apk" \
+            "release/latest.json" \
+            --repo vhxLUAv2/solis-android-updates \
+            --title "Solis Android v${VERSION}" \
+            --notes "Solis Android release v${VERSION}"
