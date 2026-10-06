@@ -72,6 +72,16 @@ jobs:
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > source/solis-release.jks
           test -s source/solis-release.jks
 
+      - name: Verify signing keystore
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          keytool -list -keystore source/solis-release.jks \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" > /tmp/keystore-check.txt
+          echo "Release keystore and password verified."
+
       - name: Build signed APK
         working-directory: source
         env:
