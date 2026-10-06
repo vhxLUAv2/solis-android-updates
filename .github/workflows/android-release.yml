@@ -81,6 +81,8 @@ jobs:
             -storepass "$ANDROID_KEYSTORE_PASSWORD" \
             -alias "$ANDROID_KEY_ALIAS" > /tmp/keystore-check.txt
           echo "Release keystore and password verified."
+          echo "Decoded keystore SHA-256:"
+          sha256sum source/solis-release.jks | awk '{print $1}'
 
       - name: Build signed APK
         working-directory: source
